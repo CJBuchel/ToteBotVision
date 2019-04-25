@@ -31,6 +31,10 @@ int main(int argc, char **argv) {
   auto inst = nt::NetworkTableInstance::GetDefault();
   auto visionTable = inst.GetTable("VisionTracking");
 
+  
+  curtinfrc_vision vision;  
+  vision.run();
+
   std::cout << "Vision Program Exited. Now there is a chance that it is meant to do that... but chances are it broke" << std::endl;
   return -1;
 }
