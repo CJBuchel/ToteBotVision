@@ -24,14 +24,14 @@ int height_goal;
 //--HumanAquisition
 bool TargetFaceAquired;
 bool TargetHumanAquired;
-int HumXoffset, HumYoffset;
+int HumanXoffset, HumanYoffset;
 
 //--ObjectAquisition
 bool TargetObjectAquired;
 int objXoffset, objYoffset;
 
 
-int ResWidth = 640, ResHeight = 480;
+int ResWidth = 320, ResHeight = 240;
 
 void curtinfrc_vision::run() {
   
@@ -60,50 +60,64 @@ void curtinfrc_vision::run() {
   // This lets us see the camera output on the robot dashboard. We give it a name, and a width and height.
   cs::CvSource output = frc::CameraServer::GetInstance()->PutVideo("USB Camera", video_mode.width, video_mode.height);
 
-  cv::Mat imgColoured{video_mode.height, video_mode.width, CV_8UC3};
-  cv::Mat VisionTracking;
-
+  cv::Mat current_frame{video_mode.height, video_mode.width, CV_8UC3};
 
   /// Set up the pedestrian detector --> let us take the default one
   HOGDescriptor hog;
   hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
 
-  while (true) {
-    // Grab a frame. If it's not an error (!= 0), convert it to grayscale and send it to the dashboard.
-    if (sink.GrabFrame(imgColoured) != 0) {
-      std::vector<Rect> faces;
+  /// Set up tracking vector
+  vector<Point> track;
 
-      cvtColor( imgColoured, VisionTracking, COLOR_BGR2GRAY );
 
-      //-- Detect Person
-      
-      vector<Rect> human;
-      vector<double> weights;
+  auto inst = nt::NetworkTableInstance::GetDefault();
+  auto visionTable = inst.GetTable("VisionTracking");
+  UsePedestrianTrackEntry = visionTable->GetEntry("Camera Set");
 
-      hog.detectMultiScale(imgColoured, human, weights);
+  UsePedestrianTrack = UsePedestrianTrackEntry.GetBoolean(true);
 
-      /// draw detections and store location
-      for( size_t i = 0; i < human.size(); i++ )
-      {
-        Rect r = human[i];
-        rectangle(imgColoured, human[i], cv::Scalar(0,0,255), 3);
-        stringstream temp;
-        temp << weights[i];
-        putText(imgColoured, temp.str(),Point(human[i].x,human[i].y+50), FONT_HERSHEY_SIMPLEX, 1, Scalar(0,0,255));
-        HumXoffset = /*width_goal - */human[i].x;
-        HumYoffset = /*height_goal - */human[i].y;
+  if(UsePedestrianTrack){
+    while (UsePedestrianTrack) {
+      // Grab a frame. If it's not an error (!= 0), convert it to grayscale and send it to the dashboard.
+      if (sink.GrabFrame(current_frame) != 0) {
+
+        Mat img = current_frame.clone();
+        resize(img,img,Size(img.cols*1, img.rows*1));
+
+        vector<Rect> found;
+        vector<double> weights;
+
+        hog.detectMultiScale(img, found, weights);
+
+        /// draw detections and store location
+        for( size_t i = 0; i < found.size(); i++ )
+        {
+          Rect r = found[i];
+          rectangle(img, found[i], cv::Scalar(0,0,255), 2);
+          stringstream temp;
+          temp << weights[i];
+          putText(img, temp.str(),Point(found[i].x,found[i].y+50), FONT_HERSHEY_SIMPLEX, 1, Scalar(0,0,255));
+          track.push_back(Point(found[i].x+found[i].width/2,found[i].y+found[i].height/2));
+        }
+
+        /// plot the track so far
+        for(size_t i = 1; i < track.size(); i++){
+          line(img, track[i-1], track[i], Scalar(255,255,0), 2);
+        }
+
+      #ifdef __DESKTOP__
+        imshow("VisionTracking", img);
+      #else
+        output.PutFrame(img);
+      #endif
+        waitKey(10);
+
       }
-      
-      //-- Show what you got
-      cout << "X[" << HumXoffset << "]," << "Y[" << HumYoffset << "]" << endl;
-
-    #ifdef __DESKTOP__
-      imshow("VisionTracking", imgColoured);
-    #else
-      output.PutFrame(imgColoured);
-    #endif
-		  waitKey(10);
-
+    }
+  }
+  else {
+    while(UsePedestrianTrack = false){
+      // Shiny Object Tracking
     }
   }
 }
